@@ -74,6 +74,13 @@ int postHandle(struct evhttp_request *req)
     }
     evbuffer_remove(buf, data, i+1);
     InsertNode(&tree, uri, data);
+    //char *q = log_make("i", uri, data);
+    //log_write(q);
+    //free(q);
+    pthread_mutex_lock(&mutex);
+    log_text = log_make("i", uri, data);
+    sem_post(&sem);
+    pthread_mutex_unlock(&mutex);
     evbuffer_add_printf(buf, "key=%s,value=%s\n", uri, data);
     evhttp_send_reply(req, HTTP_OK, "OK", buf);
     return 1;
@@ -103,6 +110,13 @@ int deleteHandle(struct evhttp_request *req)
     if(p)
     {
         tree = DeleteNode(tree, p->key);
+        //char *q = log_make("d", p->key, NULL);
+        //log_write(q);
+        //free(q);
+        pthread_mutex_lock(&mutex);
+        log_text = log_make("d", p->key, NULL);
+        sem_post(&sem);
+        pthread_mutex_unlock(&mutex);
         data = p->data;
     }
     if(!p || !data)
@@ -131,9 +145,31 @@ void genHandle(struct evhttp_request *req, void *arg)
         evhttp_send_error(req, HTTP_BADMETHOD, "Error 405 Method Not Allowed!");
 } 
 
+void w_thread()
+{
+   while(1)
+   {
+        sem_wait(&sem);
+        pthread_mutex_lock(&mutex);
+        log_write(log_text);
+        free(log_text);
+        pthread_mutex_unlock(&mutex);
+   }
+}
 
 int main()
 {
+    initialize(&tree);
+
+    int ret;
+    ret = sem_init(&sem, 0, 0);
+    assert(!ret);
+    ret = pthread_mutex_init(&mutex, NULL);
+    assert(!ret);
+
+    pthread_t write_thread;
+    pthread_create(&write_thread, NULL, (void *)w_thread, NULL);
+
     struct event_base *base;
     base = event_base_new();
     assert(base != NULL);
@@ -147,7 +183,7 @@ int main()
 
     evhttp_free(http);
     event_base_free(base);
-
+    log_close();
     return 0;
 }
 
