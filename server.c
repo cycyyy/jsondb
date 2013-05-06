@@ -77,9 +77,10 @@ int postHandle(struct evhttp_request *req)
     //char *q = log_make("i", uri, data);
     //log_write(q);
     //free(q);
+    sem_wait(&sem_empty);
     pthread_mutex_lock(&mutex);
     log_text = log_make("i", uri, data);
-    sem_post(&sem);
+    sem_post(&sem_full);
     pthread_mutex_unlock(&mutex);
     evbuffer_add_printf(buf, "key=%s,value=%s\n", uri, data);
     evhttp_send_reply(req, HTTP_OK, "OK", buf);
@@ -113,9 +114,10 @@ int deleteHandle(struct evhttp_request *req)
         //char *q = log_make("d", p->key, NULL);
         //log_write(q);
         //free(q);
+        sem_wait(&sem_empty);
         pthread_mutex_lock(&mutex);
         log_text = log_make("d", p->key, NULL);
-        sem_post(&sem);
+        sem_post(&sem_full);
         pthread_mutex_unlock(&mutex);
         data = p->data;
     }
@@ -149,10 +151,11 @@ void w_thread()
 {
    while(1)
    {
-        sem_wait(&sem);
+        sem_wait(&sem_full);
         pthread_mutex_lock(&mutex);
         log_write(log_text);
         free(log_text);
+	    sem_post(&sem_empty);
         pthread_mutex_unlock(&mutex);
    }
 }
@@ -162,7 +165,9 @@ int main()
     initialize(&tree);
 
     int ret;
-    ret = sem_init(&sem, 0, 0);
+    ret = sem_init(&sem_empty, 0, 1);
+    assert(!ret);
+    ret = sem_init(&sem_full, 0, 0);
     assert(!ret);
     ret = pthread_mutex_init(&mutex, NULL);
     assert(!ret);

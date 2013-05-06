@@ -19,7 +19,7 @@
 #endif
 
 Node *tree = NULL;
-sem_t sem;
+sem_t sem_full, sem_empty;
 pthread_mutex_t mutex;
 char *log_text;
 
